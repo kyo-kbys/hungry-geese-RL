@@ -22,13 +22,13 @@ max_grad_norm = 0.5
 # Memory class
 class RolloutStrage(object):
     def __init__(self, num_steps):
-        self.observations = []
-        self.last_observations = []
         self.masks = torch.ones(num_steps + 1, 1)
         self.rewards = torch.zeros(num_steps, 1)
-        self.actions = []
         self.returns = torch.zeros(num_steps + 1, 1)
         self.index = 0
+        self.observations = []
+        self.last_observations = []
+        self.actions = []
 
     def insert(self, current_obs, last_obs, action, reward, mask):
         self.observations.append(current_obs)
@@ -39,7 +39,9 @@ class RolloutStrage(object):
         self.index = (self.index + 1) % NUM_ADVANCED_STEP
 
     def after_update(self):
-        self.observations[0].copy_(self.observations[-1])
+        self.observations = []
+        self.last_observations = []
+        self.actions = []
         self.masks[0].copy_(self.masks[-1])
 
     def compute_returns(self, next_value):
@@ -120,6 +122,14 @@ class GNet(nn.Module):
 
         return p.squeeze(0).detach().numpy(), v.item()
 
+    def predict_for_grad(self, obs, last_obs, index):
+        x = self._make_input(obs, last_obs, index)
+        xt = np.expand_dims(x, 0)
+        xt = torch.tensor(xt, requires_grad=True)
+        p, v = self.forward(xt)
+
+        return p.squeeze(0), v
+
     # Get Action
     def get_action(self, obs, last_obs, index):
         p, _ = self.predict(obs, last_obs, index)
@@ -139,10 +149,10 @@ class GNet(nn.Module):
 
         p = torch.zeros(num_sample, 4)
         v = torch.zeros(num_sample, 1)
+        x_array = []
+        
         for i in range(num_sample):
-            p_, v_ = self.predict(obs[i], last_obs[i], index)
-            p[i] = torch.FloatTensor(p_)
-            v[i] = torch.FloatTensor([v_])
+            p[i], v[i] = self.predict_for_grad(obs[i], last_obs[i], index)
 
         log_probs = torch.log(p)
         actions_ = [np.where(np.array(self.actions) == actions[i])[0].tolist() for i in range(len(actions))] 
@@ -169,9 +179,6 @@ class Brain():
         action_log_probs = action_log_probs.view(num_steps, 1)
         
         # Advantage
-        print(values)
-        print(rollouts.returns[:-1])
-        print(action_log_probs)
         advantages = rollouts.returns[:-1] - values # torch.Size([5, 1])
         
         # Critic loss
