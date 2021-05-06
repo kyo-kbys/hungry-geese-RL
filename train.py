@@ -8,7 +8,7 @@ from agent.policy import RolloutStrage, GNet, Brain
 
 GAMMA = 0.99
 MAX_STEPS = 150
-NUM_EPISODES = 1
+NUM_EPISODES = 1000
 NUM_PROCESSES = 16
 NUM_ADVANCED_STEP = 5
 
@@ -64,6 +64,7 @@ def train(trainer, actor_critic, brain, rollouts):
             rollouts.insert(obs, last_obs, action, reward, mask)
 
             if done:
+                print("observation reset")
                 obs = trainer.reset() # Reset trainer (env)
             else:
                 obs = next_obs
@@ -80,7 +81,7 @@ def train(trainer, actor_critic, brain, rollouts):
         rollouts.after_update()
 
 if __name__ == "__main__":
-    trainer = make_trainer(env_name='hungry_geese', players=["random"])
+    trainer = make_trainer(env_name='hungry_geese', enemy_players=None)
     actor_critic = GNet()
     brain = Brain(actor_critic)
     rollouts = RolloutStrage(NUM_ADVANCED_STEP)
